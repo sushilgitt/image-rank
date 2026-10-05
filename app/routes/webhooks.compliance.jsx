@@ -1,18 +1,19 @@
 // Mandatory privacy (GDPR) compliance webhooks:
 //   customers/data_request, customers/redact, shop/redact
 //
-// authenticate.webhook verifies the HMAC and throws a 401 Response on an
-// invalid signature, which Shopify's compliance checks require.
+// The HMAC is verified first (a 401 on an invalid signature, which Shopify's
+// compliance checks require); see webhooks.server.js for why the session
+// refresh that follows must not turn a valid webhook into a 500.
 //
 // Image Rank stores no customer personal data — only per-shop sessions, the
 // monthly usage counter and app settings — so the two customer topics have
 // nothing to export or erase. shop/redact (sent 48h after uninstall) erases
 // everything stored for the shop.
-import { authenticate } from "../shopify.server";
+import { authenticateWebhookWithoutSession } from "../webhooks.server";
 import db from "../db.server";
 
 export const action = async ({ request }) => {
-  const { shop, topic } = await authenticate.webhook(request);
+  const { shop, topic } = await authenticateWebhookWithoutSession(request);
   console.log(`Received ${topic} webhook for ${shop}`);
 
   switch (topic) {
