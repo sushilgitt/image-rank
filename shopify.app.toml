@@ -1,0 +1,38 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "105b6123458f7295ca61cb1d3302d4fd"
+name = "Image Rank"
+application_url = "https://imagerank.91.239.208.85.sslip.io"
+embedded = true
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products,write_files"
+
+[access.admin]
+direct_api_mode = "online"
+
+[auth]
+redirect_urls = [
+  "https://imagerank.91.239.208.85.sslip.io/auth/callback",
+  "https://imagerank.91.239.208.85.sslip.io/auth/shopify/callback",
+  "https://imagerank.91.239.208.85.sslip.io/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2026-10"
+
+[[webhooks.subscriptions]]
+topics = [ "app/uninstalled" ]
+compliance_topics = [ "customers/redact", "customers/data_request", "shop/redact" ]
+uri = "https://imagerank.91.239.208.85.sslip.io/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = [ "products/create" ]
+uri = "https://imagerank.91.239.208.85.sslip.io/webhooks/products/create"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = false
