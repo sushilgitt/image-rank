@@ -16,7 +16,6 @@ export const PLAN_TIERS = [
     features: [
       "100 images / month",
       "WebP conversion & compression",
-      "Restore originals",
     ],
   },
   {
@@ -29,9 +28,6 @@ export const PLAN_TIERS = [
       "2,000 images / month",
       "Everything in Free",
       "AI alt text",
-      "SEO filenames",
-      "Resize & crop",
-      "Scheduled runs",
     ],
   },
   {
@@ -45,7 +41,6 @@ export const PLAN_TIERS = [
       "15,000 images / month",
       "Everything in Starter",
       "Auto-optimize new products",
-      "Watermarking & HEIC",
       "Page Speed reports",
     ],
   },
@@ -58,8 +53,7 @@ export const PLAN_TIERS = [
     features: [
       "50,000 images / month",
       "Everything in Growth",
-      "Bulk image export",
-      "Priority processing",
+      "Highest monthly image volume",
     ],
   },
 ];

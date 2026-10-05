@@ -1,46 +1,28 @@
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
-import { useState } from "react";
-import { Form, useActionData, useLoaderData } from "react-router";
 import { login } from "../../shopify.server";
-import { loginErrorMessage } from "./error.server";
 
+// The library redirects here when it can't identify the shop. If Shopify passed
+// ?shop=, start OAuth immediately; otherwise tell the merchant to open the app
+// from their Shopify admin. There is deliberately no shop-domain input — App
+// Store apps must not ask merchants to type their myshopify.com URL.
 export const loader = async ({ request }) => {
-  const errors = loginErrorMessage(await login(request));
-
-  return { errors };
-};
-
-export const action = async ({ request }) => {
-  const errors = loginErrorMessage(await login(request));
-
-  return {
-    errors,
-  };
+  const url = new URL(request.url);
+  if (url.searchParams.get("shop")) {
+    return login(request); // redirects to Shopify OAuth
+  }
+  return null;
 };
 
 export default function Auth() {
-  const loaderData = useLoaderData();
-  const actionData = useActionData();
-  const [shop, setShop] = useState("");
-  const { errors } = actionData || loaderData;
-
   return (
     <AppProvider embedded={false}>
       <s-page>
-        <Form method="post">
-          <s-section heading="Log in to Image Rank">
-            <s-text-field
-              name="shop"
-              label="Shop domain"
-              details="example.myshopify.com"
-              value={shop}
-              onChange={(e) => setShop(e.currentTarget.value)}
-              autocomplete="on"
-              error={errors.shop}
-            ></s-text-field>
-            <s-button type="submit">Log in</s-button>
-          </s-section>
-        </Form>
+        <s-section heading="Open Image Rank from Shopify">
+          <s-paragraph>
+            Image Rank runs inside your Shopify admin. Install it from the Shopify App Store, or
+            open it from Apps in your Shopify admin to sign in.
+          </s-paragraph>
+        </s-section>
       </s-page>
     </AppProvider>
   );

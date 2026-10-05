@@ -425,12 +425,6 @@ export default function ProductOptimization() {
   const usagePct = quota > 0 ? Math.min(100, Math.round((usedImages / quota) * 100)) : 0;
   const quotaReached = usedImages >= quota;
 
-  const getScoreBadge = (score) => {
-    if (score >= 80) return <Badge tone="success">{`${score}%`}</Badge>;
-    if (score >= 60) return <Badge tone="attention">{`${score}%`}</Badge>;
-    return <Badge tone="critical">{`${score}%`}</Badge>;
-  };
-
   const formatBytes = (mb) => {
     const v = mb || 0;
     if (v >= 1000) return `${(v / 1000).toFixed(1)} GB`;
@@ -492,7 +486,7 @@ export default function ProductOptimization() {
     <Page>
       <Layout>
         <Layout.Section>
-          <PageHeader icon={ImageMagicIcon} eyebrow="Optimize" title="Image Optimizer" subtitle="WebP conversion & smart compression — up to 70% smaller" />
+          <PageHeader icon={ImageMagicIcon} eyebrow="Optimize" title="Image Optimizer" subtitle="WebP conversion & smart compression — optimized images replace the originals" />
         </Layout.Section>
 
         {error && (

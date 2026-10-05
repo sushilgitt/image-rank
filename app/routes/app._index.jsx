@@ -68,7 +68,7 @@ export default function Index() {
     {
       icon: ImageMagicIcon,
       title: "Image Optimizer",
-      desc: "Compress & convert product images to WebP — up to 70% smaller, originals replaced safely.",
+      desc: "Compress & convert product images to WebP. Optimized images replace the originals on the product.",
       cta: "Open optimizer",
       onClick: () => navigate("/app/productoptimization"),
       available: true,

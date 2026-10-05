@@ -17,15 +17,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 const FEATURE_LABELS = {
   optimize: "Image optimization & WebP conversion",
   altText: "AI alt text",
-  filenameSeo: "SEO filenames",
-  resize: "Resize & crop",
-  scheduling: "Scheduled runs",
-  watermark: "Watermarking",
-  heic: "HEIC support",
   autoOptimize: "Auto-optimize new products",
   pageSpeed: "Page Speed reports",
-  bulkExport: "Bulk image export",
-  priority: "Priority processing",
 };
 
 export const loader = async ({ request }) => {

@@ -12,23 +12,15 @@
 // is by name. `getPlanByName` normalizes case and a trailing " Annual" and falls
 // back to the Free tier for unknown / missing names.
 
-// Feature flags used for gating. Features that exist in the app today: optimize,
-// webp, altText, pageSpeed, autoOptimize. The rest are declared now so future
-// features only need their flag flipped + UI built.
+// Feature flags used for gating. Only list features that actually exist in the
+// app — the billing page renders these as the plan's inclusions, so a flag for
+// an unbuilt feature would advertise something merchants can't use.
 export const FEATURES = [
   "optimize",      // image compression / replace
   "webp",          // WebP conversion
   "altText",       // AI alt text
-  "revert",        // restore originals (planned)
-  "filenameSeo",   // SEO filenames (planned)
-  "resize",        // manual resize/crop (planned)
-  "scheduling",    // scheduled runs (planned)
-  "watermark",     // watermarking (planned)
-  "heic",          // HEIC support (planned)
   "autoOptimize",  // background auto-optimize new products
   "pageSpeed",     // PageSpeed Insights reports
-  "bulkExport",    // bulk image export (planned)
-  "priority",      // priority processing (planned)
 ];
 
 function feat(...enabled) {
@@ -46,7 +38,7 @@ export const PLANS = [
     priceAnnual: 0,
     monthlyImages: 100,
     // AI alt text is intentionally NOT in Free — it's a Starter+ feature.
-    features: feat("optimize", "webp", "revert"),
+    features: feat("optimize", "webp"),
   },
   {
     tier: "starter",
@@ -54,10 +46,7 @@ export const PLANS = [
     price: 30,
     priceAnnual: 300,
     monthlyImages: 2000,
-    features: feat(
-      "optimize", "webp", "altText", "revert",
-      "filenameSeo", "resize", "scheduling",
-    ),
+    features: feat("optimize", "webp", "altText"),
   },
   {
     tier: "growth",
@@ -65,11 +54,7 @@ export const PLANS = [
     price: 99,
     priceAnnual: 990,
     monthlyImages: 15000,
-    features: feat(
-      "optimize", "webp", "altText", "revert",
-      "filenameSeo", "resize", "scheduling",
-      "watermark", "heic", "autoOptimize", "pageSpeed",
-    ),
+    features: feat("optimize", "webp", "altText", "autoOptimize", "pageSpeed"),
   },
   {
     tier: "pro",
@@ -77,12 +62,7 @@ export const PLANS = [
     price: 350,
     priceAnnual: 3500,
     monthlyImages: 50000,
-    features: feat(
-      "optimize", "webp", "altText", "revert",
-      "filenameSeo", "resize", "scheduling",
-      "watermark", "heic", "autoOptimize", "pageSpeed",
-      "bulkExport", "priority",
-    ),
+    features: feat("optimize", "webp", "altText", "autoOptimize", "pageSpeed"),
   },
 ];
 

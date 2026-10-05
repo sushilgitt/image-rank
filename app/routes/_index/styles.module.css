@@ -132,3 +132,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+.note {
+  margin: 0 auto;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: rgba(190, 242, 100, 0.1);
+  border: 1px solid rgba(190, 242, 100, 0.35);
+  color: #DCE6F2;
+  font-size: 14px;
+}
