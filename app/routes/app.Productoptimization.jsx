@@ -11,16 +11,12 @@ import { mapLimit, headSizeMB, optimizeBatch } from '../optimize.server';
 import {
   Page,
   Layout,
-  Card,
   Button,
   Badge,
   Checkbox,
   Text,
   Box,
-  InlineStack,
-  BlockStack,
   Thumbnail,
-  Divider,
   Banner,
   ProgressBar,
   Select,
@@ -477,9 +473,23 @@ export default function ProductOptimization() {
         return sum + Math.max(0, (lp.sizeSavedMB || 0) - base);
       }, 0);
 
+  const filterCounts = {
+    all: products.length,
+    needs_optimization: products.filter(p => view(p).needsOptimization).length,
+    optimized: products.filter(p => !view(p).needsOptimization).length,
+    no_alt_text: products.filter(p => p.imagesWithAlt === 0).length,
+  };
+  const allSelected = selectedProducts.length === displayedProducts.length && displayedProducts.length > 0;
+
+  const kpis = [
+    { label: 'Products', value: stats.total.toLocaleString() },
+    { label: 'Need work', value: stats.needsOptimization.toLocaleString(), tone: stats.needsOptimization > 0 ? 'warn' : undefined },
+    { label: 'Images', value: stats.totalImages.toLocaleString() },
+    { label: 'Saved so far', value: formatBytes(liveSavings), tone: 'good' },
+  ];
+
   return (
-    <Page
-    >
+    <Page>
       <Layout>
         <Layout.Section>
           <PageHeader icon={ImageMagicIcon} eyebrow="Optimize" title="Image Optimizer" subtitle="WebP conversion & smart compression — up to 70% smaller" />
@@ -496,198 +506,166 @@ export default function ProductOptimization() {
           </Layout.Section>
         )}
 
-        {/* Plan usage meter */}
+        {/* KPI strip */}
         <Layout.Section>
-          <Card>
-            <BlockStack gap="300">
-              <InlineStack align="space-between" blockAlign="center">
-                <InlineStack gap="200" blockAlign="center">
-                  <Text variant="headingSm" as="h3">Monthly usage</Text>
-                  <Badge tone={plan?.tier === 'free' ? undefined : 'success'}>{`${plan?.name || 'Free'} plan`}</Badge>
-                </InlineStack>
-                <Text variant="bodyMd" as="p" tone={quotaReached ? 'critical' : 'subdued'}>
-                  {`${usedImages.toLocaleString()} / ${quota.toLocaleString()} images`}
-                </Text>
-              </InlineStack>
+          <div className="ir-kpis">
+            {kpis.map(k => (
+              <div key={k.label} className="ir-kpi">
+                <p className={`ir-kpi-value${k.tone ? ` ir-kpi-${k.tone}` : ''}`}>{k.value}</p>
+                <p className="ir-kpi-label">{k.label}</p>
+              </div>
+            ))}
+          </div>
+        </Layout.Section>
+
+        {/* Sidebar: usage + automation */}
+        <Layout.Section variant="oneThird">
+          <div className="ir-side-card">
+            <div className="ir-side-block">
+              <div className="ir-side-row">
+                <span className="ir-side-title">Monthly usage</span>
+                <Badge tone={plan?.tier === 'free' ? undefined : 'success'}>{`${plan?.name || 'Free'} plan`}</Badge>
+              </div>
+              <p className="ir-side-big">
+                {usedImages.toLocaleString()}
+                <span>{` / ${quota.toLocaleString()}`}</span>
+              </p>
               <ProgressBar progress={usagePct} size="small" tone={quotaReached ? 'critical' : 'primary'} />
               {quotaReached && (
                 <Text variant="bodySm" as="p" tone="critical">
-                  You've used your monthly image quota. Upgrade your plan to optimize more images.
+                  Monthly quota used. Upgrade your plan to optimize more images.
                 </Text>
               )}
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-
-        {/* Auto-optimize new products (Growth+) */}
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="200">
-              <InlineStack align="space-between" blockAlign="center">
-                <BlockStack gap="100">
-                  <Text variant="headingSm" as="h3">Auto-optimize new products</Text>
-                  <Text variant="bodySm" as="p" tone="subdued">
-                    Automatically optimize images on every newly created product — set it and forget it.
-                  </Text>
-                </BlockStack>
+            </div>
+            <div className="ir-side-block">
+              <div className="ir-side-row">
+                <span className="ir-side-title">Auto-optimize</span>
                 {plan?.autoOptimizeAllowed
                   ? <Badge tone={autoOptimize ? 'success' : undefined}>{autoOptimize ? 'On' : 'Off'}</Badge>
                   : <Badge tone="attention">Growth & up</Badge>}
-              </InlineStack>
+              </div>
+              <p className="ir-side-note">Optimize images on every new product automatically, in the background.</p>
               {plan?.autoOptimizeAllowed ? (
                 <Checkbox
-                  label="Automatically optimize images on newly created products"
+                  label="Enable for new products"
                   checked={autoOptimize}
                   onChange={handleToggleAutoOptimize}
                   disabled={settingsFetcher.state !== 'idle'}
                 />
               ) : (
-                <Banner tone="info">
-                  Background auto-optimization is available on the Growth plan and above.
-                </Banner>
+                <Text variant="bodySm" as="p" tone="subdued">Available on the Growth plan and above.</Text>
               )}
-            </BlockStack>
-          </Card>
+            </div>
+          </div>
         </Layout.Section>
 
+        {/* Product list */}
         <Layout.Section>
-          <InlineStack gap="400" wrap={false}>
-            <Box width="25%">
-              <Card><BlockStack gap="200">
-                <Text variant="bodyMd" as="p" tone="subdued">Total Products</Text>
-                <Text variant="heading2xl" as="h2">{stats.total}</Text>
-              </BlockStack></Card>
-            </Box>
-            <Box width="25%">
-              <Card><BlockStack gap="200">
-                <Text variant="bodyMd" as="p" tone="subdued">Needs Optimization</Text>
-                <Text variant="heading2xl" as="h2" tone="critical">{stats.needsOptimization}</Text>
-              </BlockStack></Card>
-            </Box>
-            <Box width="25%">
-              <Card><BlockStack gap="200">
-                <Text variant="bodyMd" as="p" tone="subdued">Total Images</Text>
-                <Text variant="heading2xl" as="h2">{stats.totalImages}</Text>
-              </BlockStack></Card>
-            </Box>
-            <Box width="25%">
-              <Card><BlockStack gap="200">
-                <Text variant="bodyMd" as="p" tone="subdued">Actual Savings</Text>
-                <Text variant="heading2xl" as="h2" tone="success">{formatBytes(liveSavings)}</Text>
-              </BlockStack></Card>
-            </Box>
-          </InlineStack>
-        </Layout.Section>
+          <div className="ir-list">
+            <div className="ir-toolbar">
+              <div className="ir-pills" role="tablist" aria-label="Filter products">
+                {filterOptions.map(o => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === o.value}
+                    className={`ir-pill${filter === o.value ? ' is-active' : ''}`}
+                    onClick={() => handleFilterChange(o.value)}
+                    disabled={isBusy}
+                  >
+                    {o.label}
+                    <span className="ir-pill-count">{filterCounts[o.value]}</span>
+                  </button>
+                ))}
+              </div>
+              <Box width="210px">
+                <Select label="Sort by" labelInline options={sortOptions} value={sortBy} onChange={handleSortChange} disabled={isBusy} />
+              </Box>
+            </div>
 
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              <InlineStack align="space-between" blockAlign="center">
-                <InlineStack gap="300">
-                  <Box width="200px">
-                    <Select label="Filter" options={filterOptions} value={filter} onChange={handleFilterChange} disabled={isBusy} />
-                  </Box>
-                  <Box width="200px">
-                    <Select label="Sort by" options={sortOptions} value={sortBy} onChange={handleSortChange} disabled={isBusy} />
-                  </Box>
-                </InlineStack>
-                {selectedProducts.length > 0 && (
-                  <Button variant="primary" onClick={handleOptimizeSelected} loading={isBusy} disabled={isBusy || quotaReached}>
-                    {`Optimize Selected (${selectedProducts.length})`}
-                  </Button>
-                )}
-              </InlineStack>
-              <Divider />
+            <div className="ir-row ir-row-head">
               <Checkbox
-                label={`Select All (${displayedProducts.length} products)`}
-                checked={selectedProducts.length === displayedProducts.length && displayedProducts.length > 0}
+                label="Select all"
+                labelHidden
+                checked={allSelected}
                 onChange={handleSelectAll}
-                disabled={isBusy}
+                disabled={isBusy || displayedProducts.length === 0}
               />
-            </BlockStack>
-          </Card>
-        </Layout.Section>
+              <span />
+              <span>Product</span>
+              <span>Optimized</span>
+              <span>Saved</span>
+              <span>Score</span>
+              <span />
+            </div>
 
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              {displayedProducts.length === 0 ? (
-                <EmptyState heading="No products found" image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png">
-                  <p>Try adjusting your filters to see products.</p>
-                </EmptyState>
-              ) : (
-                displayedProducts.map((raw) => {
-                  const product = view(raw);
-                  const isActive = activeId === product.id;
-                  return (
-                    <Card key={product.id} background={selectedProducts.includes(product.id) ? 'bg-surface-selected' : undefined}>
-                      <InlineStack gap="400" blockAlign="start">
-                        <Checkbox checked={selectedProducts.includes(product.id)} onChange={() => handleSelectProduct(product.id)} disabled={isBusy} />
-                        {product.featuredImageUrl && (
-                          <Thumbnail source={product.featuredImageUrl} alt={product.title} size="large" />
-                        )}
-                        <Box width="100%">
-                          <BlockStack gap="400">
-                            <InlineStack align="space-between" blockAlign="center">
-                              <BlockStack gap="200">
-                                <Text variant="headingMd" as="h3">{product.title}</Text>
-                                <InlineStack gap="200">
-                                  <Badge>{product.status}</Badge>
-                                  <Badge tone="info">{`${product.imageCount} images`}</Badge>
-                                  {isActive && <Badge tone="attention">Optimizing…</Badge>}
-                                </InlineStack>
-                              </BlockStack>
-                              {getScoreBadge(product.score)}
-                            </InlineStack>
-
-                            <Divider />
-
-                            <InlineStack gap="800" wrap={true}>
-                              <BlockStack gap="200">
-                                <Text variant="bodySm" as="p" tone="subdued">Images with Alt Text</Text>
-                                <Text variant="bodyMd" as="p" fontWeight="semibold">{`${product.imagesWithAlt} / ${product.imageCount}`}</Text>
-                              </BlockStack>
-                              <BlockStack gap="200">
-                                <Text variant="bodySm" as="p" tone="subdued">Optimized Images</Text>
-                                <Text variant="bodyMd" as="p" fontWeight="semibold">{`${product.optimizedImages} / ${product.imageCount}`}</Text>
-                              </BlockStack>
-                              <BlockStack gap="200">
-                                <Text variant="bodySm" as="p" tone="subdued">Original Size</Text>
-                                <Text variant="bodyMd" as="p" fontWeight="semibold">{formatBytes(product.totalOriginalSizeMB)}</Text>
-                              </BlockStack>
-                              <BlockStack gap="200">
-                                <Text variant="bodySm" as="p" tone="subdued">Size Saved</Text>
-                                <Text variant="bodyMd" as="p" fontWeight="semibold" tone="success">{`${formatBytes(product.sizeSavedMB)} (${product.compressionRate}%)`}</Text>
-                              </BlockStack>
-                            </InlineStack>
-
-                            <BlockStack gap="200">
-                              <Text variant="bodySm" as="p" tone="subdued">Optimization Progress</Text>
-                              <ProgressBar
-                                progress={product.score}
-                                size="small"
-                                tone={product.score >= 80 ? 'success' : product.score >= 60 ? 'attention' : 'critical'}
-                              />
-                            </BlockStack>
-
-                            {product.needsOptimization && (
-                              <InlineStack align="end">
-                                <Button variant="primary" onClick={() => handleOptimizeProduct(product.id)} loading={isActive} disabled={isBusy || quotaReached}>
-                                  {isActive ? 'Optimizing…' : 'Optimize This Product'}
-                                </Button>
-                              </InlineStack>
-                            )}
-                          </BlockStack>
-                        </Box>
-                      </InlineStack>
-                    </Card>
-                  );
-                })
-              )}
-            </BlockStack>
-          </Card>
+            {displayedProducts.length === 0 ? (
+              <EmptyState heading="No products found" image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png">
+                <p>Try a different filter to see products.</p>
+              </EmptyState>
+            ) : (
+              displayedProducts.map((raw) => {
+                const product = view(raw);
+                const isActive = activeId === product.id;
+                const selected = selectedProducts.includes(product.id);
+                const scoreTone = product.score >= 80 ? 'good' : product.score >= 60 ? 'warn' : 'bad';
+                return (
+                  <div key={product.id} className={`ir-row${selected ? ' is-selected' : ''}${isActive ? ' is-active' : ''}`}>
+                    <Checkbox
+                      label={`Select ${product.title}`}
+                      labelHidden
+                      checked={selected}
+                      onChange={() => handleSelectProduct(product.id)}
+                      disabled={isBusy}
+                    />
+                    <Thumbnail source={product.featuredImageUrl || ImageMagicIcon} alt={product.title} size="small" />
+                    <div className="ir-row-main">
+                      <p className="ir-row-title">{product.title}</p>
+                      <p className="ir-row-meta">
+                        {`${product.status.toLowerCase()} · ${product.imageCount} images · alt text ${product.imagesWithAlt}/${product.imageCount}`}
+                        {isActive && <span className="ir-live-dot">Optimizing</span>}
+                      </p>
+                    </div>
+                    <div className="ir-row-progress">
+                      <span>{`${product.optimizedImages}/${product.imageCount}`}</span>
+                      <div className="ir-bar"><i style={{ width: `${product.score}%` }} /></div>
+                    </div>
+                    <div className="ir-row-saved">
+                      <strong>{formatBytes(product.sizeSavedMB)}</strong>
+                      <span>{`of ${formatBytes(product.totalOriginalSizeMB)}`}</span>
+                    </div>
+                    <div className={`ir-score ir-score-${scoreTone}`} style={{ '--pct': product.score }}>
+                      <span>{product.score}</span>
+                    </div>
+                    <div className="ir-row-action">
+                      {product.needsOptimization ? (
+                        <Button size="slim" variant="primary" onClick={() => handleOptimizeProduct(product.id)} loading={isActive} disabled={isBusy || quotaReached}>
+                          Optimize
+                        </Button>
+                      ) : (
+                        <Badge tone="success">Done</Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </Layout.Section>
       </Layout>
+
+      {selectedProducts.length > 0 && (
+        <div className="ir-bulkbar" role="region" aria-label="Bulk actions">
+          <span>{`${selectedProducts.length} product${selectedProducts.length === 1 ? '' : 's'} selected`}</span>
+          <div className="ir-bulkbar-actions">
+            <button type="button" className="ir-btn ir-btn-ghost" onClick={() => setSelectedProducts([])} disabled={isBusy}>Clear</button>
+            <button type="button" className="ir-btn ir-btn-lime" onClick={handleOptimizeSelected} disabled={isBusy || quotaReached}>
+              {isBusy ? 'Optimizing…' : 'Optimize selected'}
+            </button>
+          </div>
+        </div>
+      )}
     </Page>
   );
 }

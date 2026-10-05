@@ -9,19 +9,8 @@ import {
   cancelSubscription,
 } from "../billing.server";
 import { getUsage } from "../usage.server";
-import {
-  Page,
-  Layout,
-  Card,
-  Button,
-  Text,
-  BlockStack,
-  InlineStack,
-  Badge,
-  Divider,
-  Banner,
-  ProgressBar,
-} from "@shopify/polaris";
+import { PLAN_TIERS } from "../planCatalog";
+import { Page, Layout, BlockStack, Banner } from "@shopify/polaris";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 // Human labels for the entitlement flags, shown as the current plan's inclusions.
@@ -93,7 +82,7 @@ export const action = async ({ request }) => {
 };
 
 export default function BillingPage() {
-  const { hasActivePlan, planName, tier, monthlyImages, included, imagesUsed, pricingUrl } = useLoaderData();
+  const { hasActivePlan, planName, monthlyImages, included, imagesUsed, pricingUrl } = useLoaderData();
   const actionData = useActionData();
   const navigation = useNavigation();
   const submit = useSubmit();
@@ -109,6 +98,7 @@ export default function BillingPage() {
   const used = imagesUsed || 0;
   const pct = quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : 0;
   const fmt = (n) => Number(n).toLocaleString();
+  const currentIdx = PLAN_TIERS.findIndex((t) => t.name === planName);
 
   return (
     <Page>
@@ -126,65 +116,74 @@ export default function BillingPage() {
         )}
 
         <Layout.Section>
-          <Card>
-            <BlockStack gap="500">
-              <InlineStack align="space-between" blockAlign="center">
-                <BlockStack gap="200">
-                  <InlineStack gap="300" blockAlign="center">
-                    <Text variant="headingXl" as="h2">{planName}</Text>
-                    {hasActivePlan
-                      ? <Badge tone="success">Active</Badge>
-                      : <Badge>Current</Badge>}
-                  </InlineStack>
-                  <Text variant="bodySm" as="p" tone="subdued">
-                    {`Up to ${fmt(quota)} optimized images per month`}
-                  </Text>
-                </BlockStack>
-                <InlineStack gap="300">
-                  <Button variant="primary" url={pricingUrl} target="_top">
+          <BlockStack gap="400">
+            {/* Membership card */}
+            <div className="ir-plan-card">
+              <div>
+                <p className="ir-eyebrow">{hasActivePlan ? "Active plan" : "Current plan"}</p>
+                <p className="ir-plan-name">{planName}</p>
+                <p className="ir-plan-sub">{`Up to ${fmt(quota)} optimized images every month`}</p>
+                <div className="ir-hero-actions">
+                  <a className="ir-btn ir-btn-lime" href={pricingUrl} target="_top">
                     {hasActivePlan ? "Change plan" : "Choose a plan"}
-                  </Button>
+                  </a>
                   {hasActivePlan && (
-                    <Button tone="critical" variant="plain" loading={isBusy} onClick={() => post("cancel")}>
-                      Cancel
-                    </Button>
+                    <button type="button" className="ir-btn ir-btn-ghost" disabled={isBusy} onClick={() => post("cancel")}>
+                      {isBusy ? "Cancelling…" : "Cancel plan"}
+                    </button>
                   )}
-                </InlineStack>
-              </InlineStack>
-
-              <BlockStack gap="200">
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text variant="bodySm" as="p" tone="subdued">Images this month</Text>
-                  <Text variant="bodySm" as="p" tone={pct >= 100 ? "critical" : "subdued"}>
-                    {`${fmt(used)} / ${fmt(quota)}`}
-                  </Text>
-                </InlineStack>
-                <ProgressBar progress={pct} size="small" tone={pct >= 100 ? "critical" : "primary"} />
-              </BlockStack>
-
-              <Divider />
-
-              <BlockStack gap="300">
-                <Text variant="headingSm" as="h3">Included in your plan</Text>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-                  {included.map((k) => (
-                    <InlineStack key={k} gap="200" blockAlign="center">
-                      <span className="ir-check">✓</span>
-                      <Text variant="bodySm" as="span">{FEATURE_LABELS[k]}</Text>
-                    </InlineStack>
-                  ))}
                 </div>
-              </BlockStack>
-            </BlockStack>
-          </Card>
+              </div>
+              <div className="ir-ring" style={{ "--pct": pct }} role="img" aria-label={`${pct}% of monthly images used`}>
+                <div>
+                  <div className="ir-ring-value">{`${pct}%`}</div>
+                  <div className="ir-ring-label">{`${fmt(used)} / ${fmt(quota)} used`}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Feature checklist */}
+            <div className="ir-panel">
+              <p className="ir-panel-title">What&apos;s included</p>
+              <div className="ir-features">
+                {Object.entries(FEATURE_LABELS).map(([k, label]) => {
+                  const on = included.includes(k);
+                  return (
+                    <div key={k} className={`ir-feature${on ? "" : " is-locked"}`}>
+                      <span className="ir-feature-mark" aria-hidden="true">{on ? "✓" : "–"}</span>
+                      <span>{label}</span>
+                      {!on && <span className="ir-feature-tag">Upgrade</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </BlockStack>
         </Layout.Section>
 
-        <Layout.Section>
-          <Text variant="bodySm" as="p" tone="subdued">
-            Plans and prices are managed securely on Shopify's billing page. Use “Change plan”
-            to upgrade, downgrade, or switch between monthly and yearly — changes are reflected
-            here automatically.
-          </Text>
+        {/* Plan ladder */}
+        <Layout.Section variant="oneThird">
+          <div className="ir-panel">
+            <p className="ir-panel-title">All plans</p>
+            <ol className="ir-ladder">
+              {PLAN_TIERS.map((t, i) => (
+                <li key={t.name} className={i === currentIdx ? "is-current" : i < currentIdx ? "is-below" : ""}>
+                  <span className="ir-ladder-dot" aria-hidden="true" />
+                  <div>
+                    <p className="ir-ladder-name">
+                      {t.name}
+                      {i === currentIdx && <span className="ir-ladder-you">You</span>}
+                    </p>
+                    <p className="ir-ladder-meta">{`${t.images} images / mo · $${t.price}/mo`}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <p className="ir-side-note" style={{ marginTop: 14 }}>
+              Plans are billed securely by Shopify. Upgrades, downgrades and monthly/yearly switches
+              show up here automatically.
+            </p>
+          </div>
         </Layout.Section>
       </Layout>
     </Page>
