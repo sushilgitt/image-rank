@@ -1,3 +1,5 @@
+import PageHeader from "../components/PageHeader";
+import { GaugeIcon } from "@shopify/polaris-icons";
 import { useState, useCallback, useEffect } from 'react';
 import { useLoaderData, useSubmit, useNavigation, useActionData, redirect } from 'react-router';
 import { authenticate } from '../shopify.server';
@@ -469,18 +471,10 @@ export default function PageSpeedImpactReports() {
 
   return (
     <Page
-      title="Image Rank — Page Speed Reports"
-      subtitle="Measured image savings from your optimization runs, plus live PageSpeed tests"
     >
       <Layout>
         <Layout.Section>
-          <div className="pb-page-header">
-            <span className="pb-page-header-icon">📊</span>
-            <div>
-              <p className="pb-page-header-title">Page Speed Reports</p>
-              <p className="pb-page-header-sub">Measured image savings &amp; live Core Web Vitals testing</p>
-            </div>
-          </div>
+          <PageHeader icon={GaugeIcon} eyebrow="Performance" title="Page Speed Reports" subtitle="Measured image savings & live Core Web Vitals testing" />
         </Layout.Section>
         {loadError && (
           <Layout.Section>

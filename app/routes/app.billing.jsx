@@ -1,3 +1,5 @@
+import PageHeader from "../components/PageHeader";
+import { CreditCardIcon } from "@shopify/polaris-icons";
 import { useLoaderData, useSubmit, useNavigation, useActionData } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
@@ -109,8 +111,12 @@ export default function BillingPage() {
   const fmt = (n) => Number(n).toLocaleString();
 
   return (
-    <Page title="Image Rank — Billing" subtitle="Manage your plan">
+    <Page>
       <Layout>
+        <Layout.Section>
+          <PageHeader icon={CreditCardIcon} eyebrow="Account" title="Plan & billing" subtitle="Your plan, monthly usage and what's included" />
+        </Layout.Section>
+
         {actionData?.cancelled && !hasActivePlan && (
           <Layout.Section>
             <Banner title="Subscription cancelled" tone="info">
@@ -163,7 +169,7 @@ export default function BillingPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
                   {included.map((k) => (
                     <InlineStack key={k} gap="200" blockAlign="center">
-                      <span style={{ color: "#F4476B", fontWeight: 800 }}>✓</span>
+                      <span className="ir-check">✓</span>
                       <Text variant="bodySm" as="span">{FEATURE_LABELS[k]}</Text>
                     </InlineStack>
                   ))}

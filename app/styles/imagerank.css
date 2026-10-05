@@ -1,180 +1,296 @@
-/* Image Rank Brand Theme — Sunset Coral (distinct from ImageGenie purple) */
+/* Image Rank brand theme — "Midnight & Mint"
+   Deep navy surfaces, teal→cyan actions, lime highlights.
+   Display: Space Grotesk · Body: Plus Jakarta Sans */
 
-:root {
-  --op-1: #FF7A45;            /* sunset orange */
-  --op-2: #F4476B;            /* coral rose    */
-  --op-accent: #F4476B;
-  --op-accent-dark: #D62F57;
-  --op-ink: #1A1426;          /* warm near-black */
-  --op-soft-1: #FFF1EC;
-  --op-soft-2: #FFE4EC;
-  --op-grad: linear-gradient(135deg, #FF7A45 0%, #F4476B 100%);
-  --op-grad-dark: linear-gradient(135deg, #F4476B 0%, #B91C50 100%);
-  --op-grad-soft: linear-gradient(135deg, #FFF1EC 0%, #FFE4EC 100%);
-  --op-tint: #FFF7F4;         /* page wash */
-  --op-ring: rgba(244, 71, 107, 0.18);
+:root:root {
+  --ir-ink: #0B1530;           /* midnight navy */
+  --ir-ink-2: #14224A;
+  --ir-teal: #0D9488;
+  --ir-teal-dark: #0F766E;
+  --ir-cyan: #0891B2;
+  --ir-lime: #BEF264;
+  --ir-wash: #F2F7F7;
+  --ir-line: #DDE8EA;
+  --ir-muted: #5B6B82;
+  --ir-soft: #E6F6F4;
+  --ir-grad: linear-gradient(135deg, #0D9488 0%, #0891B2 100%);
+  --ir-grad-dark: linear-gradient(135deg, #0F766E 0%, #0E7490 100%);
+  --ir-ring: rgba(13, 148, 136, 0.22);
+  --ir-font-display: "Space Grotesk", "Plus Jakarta Sans", system-ui, sans-serif;
+  --ir-font-body: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Polaris tokens — swap the whole admin UI to the brand font */
+  --p-font-family-sans: var(--ir-font-body);
 }
 
-/* ── Primary buttons ───────────────────────── */
+body {
+  margin: 0;
+  font-family: var(--ir-font-body);
+  background: var(--ir-wash);
+}
+.Polaris-Text--headingXl,
+.Polaris-Text--heading2xl,
+.Polaris-Text--heading3xl,
+.Polaris-Text--headingLg,
+.Polaris-Text--headingMd,
+.Polaris-Page-Header__Title,
+.Polaris-Header-Title {
+  font-family: var(--ir-font-display) !important;
+  letter-spacing: -0.01em;
+}
+
+/* ── Polaris overrides ─────────────────────── */
 .Polaris-Button--variantPrimary {
-  background: var(--op-grad) !important;
-  border-color: var(--op-2) !important;
-  box-shadow: 0 2px 8px rgba(244, 71, 107, 0.32) !important;
+  background: var(--ir-grad) !important;
+  border-color: var(--ir-teal) !important;
+  box-shadow: 0 2px 10px rgba(8, 145, 178, 0.28) !important;
 }
 .Polaris-Button--variantPrimary:hover:not(:disabled) {
-  background: var(--op-grad-dark) !important;
-  border-color: var(--op-accent-dark) !important;
+  background: var(--ir-grad-dark) !important;
+  border-color: var(--ir-teal-dark) !important;
 }
 .Polaris-Button--variantPrimary:active:not(:disabled) {
-  background: linear-gradient(135deg, #D62F57 0%, #8F1740 100%) !important;
+  background: linear-gradient(135deg, #115E59 0%, #155E75 100%) !important;
 }
 
-/* ── Links ─────────────────────────────────── */
-.Polaris-Link { color: var(--op-accent) !important; }
-.Polaris-Link:hover { color: var(--op-accent-dark) !important; }
+.Polaris-Link { color: var(--ir-cyan) !important; }
+.Polaris-Link:hover { color: var(--ir-teal-dark) !important; }
 
-/* ── Focus rings ───────────────────────────── */
 .Polaris-TextField__Input:focus {
-  border-color: var(--op-accent) !important;
-  box-shadow: 0 0 0 3px var(--op-ring) !important;
+  border-color: var(--ir-teal) !important;
+  box-shadow: 0 0 0 3px var(--ir-ring) !important;
 }
 
-/* ── Checkboxes ────────────────────────────── */
 .Polaris-Checkbox__Input:checked + .Polaris-Checkbox__Backdrop {
-  background: var(--op-accent) !important;
-  border-color: var(--op-accent) !important;
+  background: var(--ir-teal) !important;
+  border-color: var(--ir-teal) !important;
 }
 
-/* ── Image Rank hero banner ───────────────────── */
-.pb-hero {
-  position: relative;
-  background: var(--op-grad);
-  border-radius: 18px;
-  padding: 36px 32px;
-  color: white;
-  margin-bottom: 22px;
-  overflow: hidden;
-  box-shadow: 0 14px 40px rgba(244, 71, 107, 0.28);
+.Polaris-ProgressBar__Indicator--tonePrimary {
+  background: var(--ir-grad) !important;
 }
-.pb-hero::after {
+
+.Polaris-ShadowBevel {
+  --pc-shadow-bevel-border-radius: 14px;
+}
+
+/* ── Home hero (dark, grid texture, teal glow) ─ */
+.ir-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(600px 260px at 85% -10%, rgba(34, 211, 238, 0.28), transparent 60%),
+    radial-gradient(500px 240px at 0% 120%, rgba(13, 148, 136, 0.35), transparent 60%),
+    var(--ir-ink);
+  border-radius: 20px;
+  padding: 32px;
+  color: #fff;
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+}
+.ir-hero::before {
   content: "";
   position: absolute;
-  top: -60px; right: -40px;
-  width: 220px; height: 220px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  pointer-events: none; /* decorative only — must not block the hero button */
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(90deg, transparent, #000 60%);
+  pointer-events: none;
 }
-.pb-hero h1 {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  margin: 0 0 8px 0;
-  color: white;
+.ir-hero > * { position: relative; }
+.ir-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--ir-font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ir-lime);
+  margin: 0 0 12px;
 }
-.pb-hero p {
-  font-size: 15px;
-  opacity: 0.92;
-  margin: 0;
-  color: white;
+.ir-eyebrow::before {
+  content: "";
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  background: var(--ir-lime);
+  transform: rotate(45deg);
 }
-
-/* ── Stat cards ─────────────────────────────── */
-.pb-stat-card {
-  background: white;
-  border: 1px solid #F1E4DE;
-  border-radius: 14px;
-  padding: 20px;
-  text-align: center;
-  transition: box-shadow 0.2s, transform 0.2s;
+.ir-hero h1 {
+  font-family: var(--ir-font-display);
+  font-size: 34px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+  color: #fff;
 }
-.pb-stat-card:hover {
-  box-shadow: 0 8px 22px rgba(244, 71, 107, 0.14);
-  transform: translateY(-2px);
-}
-.pb-stat-value {
-  font-size: 32px;
-  font-weight: 800;
-  background: var(--op-grad);
+.ir-hero h1 em {
+  font-style: normal;
+  background: linear-gradient(90deg, #5EEAD4, var(--ir-lime));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin: 0;
 }
-.pb-stat-label { font-size: 13px; color: #6B7280; margin: 4px 0 0 0; }
-
-/* ── Feature cards ──────────────────────────── */
-.pb-feature-card {
-  background: white;
-  border: 1px solid #F1E4DE;
-  border-radius: 16px;
-  padding: 24px;
-  transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
-  height: 100%;
+.ir-hero p.ir-hero-sub {
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(226, 236, 248, 0.82);
+  margin: 0 0 22px;
+  max-width: 520px;
 }
-.pb-feature-card:hover {
-  box-shadow: 0 10px 28px rgba(244, 71, 107, 0.12);
-  border-color: #F8C6B8;
-  transform: translateY(-3px);
-}
-.pb-feature-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: var(--op-grad-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  margin-bottom: 14px;
-}
-.pb-feature-title { font-size: 16px; font-weight: 700; color: var(--op-ink); margin: 0 0 8px 0; }
-.pb-feature-desc { font-size: 13px; color: #6B7280; line-height: 1.5; margin: 0 0 16px 0; }
-.pb-feature-list { list-style: none; padding: 0; margin: 0 0 18px 0; }
-.pb-feature-list li {
-  font-size: 13px; color: #374151;
-  padding: 3px 0 3px 20px; position: relative;
-}
-.pb-feature-list li::before {
-  content: "✓";
-  color: var(--op-accent);
-  position: absolute; left: 0; font-weight: 700;
-}
-
-/* ── Page header accent — solid card w/ left bar (distinct shape) ── */
-.pb-page-header {
-  background: #FFFFFF;
-  border: 1px solid #F1E4DE;
-  border-left: 5px solid transparent;
-  border-image: var(--op-grad) 1;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  box-shadow: 0 4px 14px rgba(244, 71, 107, 0.07);
-}
-.pb-page-header-icon {
-  width: 44px; height: 44px;
-  border-radius: 12px;
-  background: var(--op-grad);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px; line-height: 1;
-  box-shadow: 0 4px 12px rgba(244, 71, 107, 0.3);
-}
-.pb-page-header-title { font-size: 15px; font-weight: 700; color: var(--op-ink); margin: 0; }
-.pb-page-header-sub { font-size: 12px; color: var(--op-accent); opacity: 0.9; margin: 2px 0 0 0; }
-
-/* ── Step badges ────────────────────────────── */
-.pb-step-badge {
+.ir-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.ir-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px; height: 28px;
+  gap: 8px;
+  padding: 11px 18px;
+  border-radius: 10px;
+  border: 0;
+  cursor: pointer;
+  font: 600 14px/1 var(--ir-font-body);
+  text-decoration: none;
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.ir-btn:hover { transform: translateY(-1px); }
+.ir-btn-lime { background: var(--ir-lime); color: var(--ir-ink); box-shadow: 0 6px 18px rgba(190, 242, 100, 0.25); }
+.ir-btn-ghost { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.18); }
+.ir-btn-ghost:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* Usage ring */
+.ir-ring {
+  --pct: 0;
+  width: 168px; height: 168px;
   border-radius: 50%;
-  background: var(--op-grad);
-  color: white;
-  font-size: 13px; font-weight: 700;
+  background:
+    radial-gradient(closest-side, var(--ir-ink) 78%, transparent 79%),
+    conic-gradient(var(--ir-lime) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.1) 0);
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.ir-ring-value { font-family: var(--ir-font-display); font-size: 32px; font-weight: 700; color: #fff; line-height: 1; }
+.ir-ring-label { font-size: 11px; color: rgba(226, 236, 248, 0.7); margin-top: 6px; letter-spacing: 0.04em; }
+
+/* ── Stat tiles ────────────────────────────── */
+.ir-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.ir-stat {
+  background: #fff;
+  border: 1px solid var(--ir-line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ir-stat-icon {
+  width: 40px; height: 40px;
   flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--ir-soft);
+  display: grid;
+  place-items: center;
+  --p-color-icon: var(--ir-teal);
+}
+.ir-stat-icon svg { fill: var(--ir-teal); }
+.ir-stat-value { font-family: var(--ir-font-display); font-size: 22px; font-weight: 700; color: var(--ir-ink); margin: 0; line-height: 1.1; }
+.ir-stat-label { font-size: 12px; color: var(--ir-muted); margin: 2px 0 0; }
+
+/* ── Tool cards (2×2 grid) ─────────────────── */
+.ir-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.ir-tool {
+  background: #fff;
+  border: 1px solid var(--ir-line);
+  border-radius: 16px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.ir-tool:hover {
+  border-color: #9ADBD3;
+  box-shadow: 0 12px 30px rgba(11, 21, 48, 0.08);
+  transform: translateY(-2px);
+}
+.ir-tool-locked { background: linear-gradient(180deg, #fff 0%, #F7FAFB 100%); }
+.ir-tool-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ir-tool-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: var(--ir-ink);
+  display: grid;
+  place-items: center;
+}
+.ir-tool-icon svg { fill: var(--ir-lime); }
+.ir-tool-title { font-family: var(--ir-font-display); font-size: 17px; font-weight: 700; color: var(--ir-ink); margin: 0; }
+.ir-tool-desc { font-size: 13px; line-height: 1.55; color: var(--ir-muted); margin: 0; flex: 1; }
+
+.ir-section-title {
+  font-family: var(--ir-font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ir-muted);
+  margin: 6px 0 12px;
+}
+
+/* ── Page header (shared component) ────────── */
+.ir-page-header {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  border-radius: 16px;
+  background:
+    radial-gradient(420px 160px at 100% 0%, rgba(34, 211, 238, 0.22), transparent 60%),
+    var(--ir-ink);
+  color: #fff;
+}
+.ir-page-header-icon {
+  width: 46px; height: 46px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: rgba(190, 242, 100, 0.12);
+  border: 1px solid rgba(190, 242, 100, 0.35);
+  display: grid;
+  place-items: center;
+}
+.ir-page-header-icon svg { fill: var(--ir-lime); }
+.ir-page-header-eyebrow {
+  font-family: var(--ir-font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ir-lime);
+  margin: 0 0 2px;
+}
+.ir-page-header-title { font-family: var(--ir-font-display); font-size: 20px; font-weight: 700; margin: 0; color: #fff; }
+.ir-page-header-sub { font-size: 13px; color: rgba(226, 236, 248, 0.78); margin: 2px 0 0; }
+
+.ir-check { color: var(--ir-teal); font-weight: 800; }
+
+@media (max-width: 900px) {
+  .ir-hero { grid-template-columns: 1fr; }
+  .ir-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ir-tools { grid-template-columns: 1fr; }
 }

@@ -1,3 +1,5 @@
+import PageHeader from "../components/PageHeader";
+import { ChartVerticalIcon } from "@shopify/polaris-icons";
 import { useState, useCallback } from 'react';
 import { useLoaderData, useSubmit } from 'react-router';
 import { authenticate } from '../shopify.server';
@@ -443,7 +445,7 @@ export default function ImageOptimizationDashboard() {
 
   return (
     <Page
-      title="Image Rank — Optimization Analytics"
+      title="Optimization Analytics"
       subtitle="Measured results from your image optimization runs"
       primaryAction={{ 
         content: 'Export Report', 
@@ -458,13 +460,7 @@ export default function ImageOptimizationDashboard() {
     >
       <Layout>
         <Layout.Section>
-          <div className="pb-page-header">
-            <span className="pb-page-header-icon">📈</span>
-            <div>
-              <p className="pb-page-header-title">Optimization Analytics</p>
-              <p className="pb-page-header-sub">Size savings, compression rates &amp; format breakdown</p>
-            </div>
-          </div>
+          <PageHeader icon={ChartVerticalIcon} eyebrow="Analytics" title="Optimization Analytics" subtitle="Size savings, compression rates & format breakdown" />
         </Layout.Section>
         {loadError && (
           <Layout.Section>

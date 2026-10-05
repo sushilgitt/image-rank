@@ -18,10 +18,10 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>Image Rank</h1>
+        <p className={styles.eyebrow}>◆ Image Rank</p>
+        <h1 className={styles.heading}>Lighter images. Higher rankings.</h1>
         <p className={styles.text}>
-          Image Optimization & SEO Suite for Shopify stores.
-          Compress images, generate AI alt text, and track performance.
+          The image optimization & SEO suite for Shopify. Compress to WebP, write AI alt text, and track page speed.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
@@ -37,13 +37,13 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>AI Alt Text Generator</strong>. Generate SEO-optimized alt text for product images using AI vision.
+            <strong>AI alt text</strong> Generate SEO-optimized alt text for product images using AI vision.
           </li>
           <li>
-            <strong>Smart Image Compression</strong>. Reduce image sizes by up to 70% with automatic WebP conversion.
+            <strong>Smart compression</strong> Reduce image sizes by up to 70% with automatic WebP conversion.
           </li>
           <li>
-            <strong>Performance Reports</strong>. Track Core Web Vitals and PageSpeed improvements in real-time.
+            <strong>Page speed reports</strong> Track Core Web Vitals and PageSpeed improvements in real-time.
           </li>
         </ul>
       </div>

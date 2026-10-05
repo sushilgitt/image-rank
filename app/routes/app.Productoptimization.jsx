@@ -1,3 +1,5 @@
+import PageHeader from "../components/PageHeader";
+import { ImageMagicIcon } from "@shopify/polaris-icons";
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useLoaderData, useFetcher, useRevalidator } from 'react-router';
 import { authenticate } from '../shopify.server';
@@ -477,18 +479,10 @@ export default function ProductOptimization() {
 
   return (
     <Page
-      title="Image Rank — Image Optimizer"
-      subtitle="Compress and replace product images with real optimization and automatic WebP conversion"
     >
       <Layout>
         <Layout.Section>
-          <div className="pb-page-header">
-            <span className="pb-page-header-icon">⚡</span>
-            <div>
-              <p className="pb-page-header-title">Image Optimizer</p>
-              <p className="pb-page-header-sub">WebP conversion &amp; smart compression — up to 70% smaller</p>
-            </div>
-          </div>
+          <PageHeader icon={ImageMagicIcon} eyebrow="Optimize" title="Image Optimizer" subtitle="WebP conversion & smart compression — up to 70% smaller" />
         </Layout.Section>
 
         {error && (

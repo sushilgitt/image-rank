@@ -1,3 +1,5 @@
+import PageHeader from "../components/PageHeader";
+import { MagicIcon } from "@shopify/polaris-icons";
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useLoaderData, useSubmit, useNavigation, useActionData, useFetcher, redirect } from 'react-router';
 import { authenticate } from '../shopify.server';
@@ -684,18 +686,10 @@ export default function AltTextSuggestions() {
 
   return (
     <Page
-      title="Image Rank — AI Alt Text Generator"
-      subtitle="One AI caption per product, applied to all its images — saves API usage"
     >
       <Layout>
         <Layout.Section>
-          <div className="pb-page-header">
-            <span className="pb-page-header-icon">✨</span>
-            <div>
-              <p className="pb-page-header-title">AI Alt Text Generator</p>
-              <p className="pb-page-header-sub">Powered by OpenAI GPT-4o-mini — one caption per product</p>
-            </div>
-          </div>
+          <PageHeader icon={MagicIcon} eyebrow="AI SEO" title="AI Alt Text Generator" subtitle="Powered by OpenAI GPT-4o-mini — one caption per product" />
         </Layout.Section>
         {error && (
           <Layout.Section>
