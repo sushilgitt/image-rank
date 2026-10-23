@@ -80,21 +80,35 @@ export async function getBillingState(admin, shop = null) {
 // instantly. A cancel relocks within BILLING_TTL_MS, which is fine.
 const billingCache = new Map(); // shop -> { state, expires }
 const BILLING_TTL_MS = 120 * 1000;
+// A document load runs the layout and page loaders in parallel, and both ask
+// for billing state; share one in-flight lookup instead of making two.
+const billingInFlight = new Map(); // shop -> Promise<state>
 
 export async function getBillingStateCached(admin, shop) {
-  if (shop) {
-    const hit = billingCache.get(shop);
-    if (hit && hit.expires > Date.now()) return hit.state;
-  }
-  const state = await getBillingState(admin, shop);
-  if (shop) {
-    if (state.hasActivePlan) {
-      billingCache.set(shop, { state, expires: Date.now() + BILLING_TTL_MS });
-    } else {
-      billingCache.delete(shop);
-    }
-  }
-  return state;
+  if (!shop) return getBillingState(admin, shop);
+  const hit = billingCache.get(shop);
+  if (hit && hit.expires > Date.now()) return hit.state;
+
+  const pending = billingInFlight.get(shop);
+  if (pending) return pending;
+
+  const lookup = getBillingState(admin, shop)
+    .then((state) => {
+      if (state.hasActivePlan) {
+        billingCache.set(shop, { state, expires: Date.now() + BILLING_TTL_MS });
+      } else {
+        billingCache.delete(shop);
+      }
+      return state;
+    })
+    .finally(() => billingInFlight.delete(shop));
+  billingInFlight.set(shop, lookup);
+  return lookup;
+}
+
+// Drop the cached state, e.g. right after a cancel so the app relocks at once.
+export function clearBillingCache(shop) {
+  billingCache.delete(shop);
 }
 
 // Builds the Shopify-hosted managed-pricing page URL where merchants can

@@ -5,6 +5,7 @@ import { useLoaderData, useSubmit, useNavigation, useActionData, redirect } from
 import { authenticate } from '../shopify.server';
 import { getBillingStateCached } from '../billing.server';
 import { entitled } from '../plans.server';
+import { fetchAllProducts } from '../catalog.server';
 
 // Page Speed reports are a Growth+ feature. Resolve the shop's plan and return
 // its entitlement; lets a Response (re-auth) propagate, treats any other failure
@@ -34,54 +35,27 @@ import {
 } from '@shopify/polaris';
 
 /**
- * Fetch all products from Shopify with optimization data
+ * Fetch all products with their optimization summary. Only scalar fields plus
+ * one metafield per product, so 250 products per page stays well under
+ * Shopify's 1,000-point single-query cost cap.
  */
-async function getAllProductHandles(admin) {
-  const query = `#graphql
-    query GetProducts($cursor: String) {
-      products(first: 250, after: $cursor) {
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
-        edges {
-          node {
-            id
-            title
-            handle
-            onlineStoreUrl
-            metafields(first: 10, namespace: "image_optimization") {
-              edges {
-                node {
-                  key
-                  value
-                }
-              }
-            }
-          }
-        }
+const PRODUCTS_QUERY = `#graphql
+  query PageSpeedProducts($cursor: String) {
+    products(first: 250, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        id
+        title
+        handle
+        onlineStoreUrl
+        summary: metafield(namespace: "image_optimization", key: "optimization_summary") { value }
       }
     }
-  `;
-
-  let allProducts = [];
-  let hasNextPage = true;
-  let cursor = null;
-
-  while (hasNextPage) {
-    const response = await admin.graphql(query, {
-      variables: { cursor }
-    });
-
-    const data = await response.json();
-    const products = data.data.products.edges.map(edge => edge.node);
-    allProducts = [...allProducts, ...products];
-
-    hasNextPage = data.data.products.pageInfo.hasNextPage;
-    cursor = data.data.products.pageInfo.endCursor;
   }
+`;
 
-  return allProducts;
+async function getAllProductHandles(admin) {
+  return (await fetchAllProducts(admin, PRODUCTS_QUERY)).nodes;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -175,17 +149,12 @@ async function runPageSpeedTest(url) {
  * (written by the optimizer after actual compression runs).
  */
 function getOptimizationData(product) {
-  const metafields = product.metafields?.edges || [];
-  const optimizationSummary = metafields.find(
-    mf => mf.node.key === 'optimization_summary'
-  );
-
-  if (!optimizationSummary) {
+  if (!product.summary?.value) {
     return null;
   }
 
   try {
-    const data = JSON.parse(optimizationSummary.node.value);
+    const data = JSON.parse(product.summary.value);
 
     return {
       totalSizeSavedMB: parseFloat((data.totalSizeSavedMB || 0).toFixed(2)),
@@ -320,6 +289,13 @@ export async function loader({ request }) {
       error: 'Failed to load optimization data'
     };
   }
+}
+
+// A PageSpeed run is a POST whose result comes back as action data; the
+// product list doesn't change, so don't re-fetch the catalog after it.
+export function shouldRevalidate({ formMethod, defaultShouldRevalidate }) {
+  if (formMethod && formMethod !== 'GET') return false;
+  return defaultShouldRevalidate;
 }
 
 export async function action({ request }) {

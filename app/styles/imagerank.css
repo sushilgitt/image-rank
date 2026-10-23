@@ -394,6 +394,10 @@ body {
   color: var(--ir-muted);
 }
 .ir-row-head:hover { background: #F7FAFB; }
+.ir-row-loading {
+  padding: 14px 16px;
+  text-align: center;
+}
 .ir-row-main { min-width: 0; }
 .ir-row-title {
   margin: 0;

@@ -19,20 +19,19 @@ import {
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
 
-  let plan = null;
-  try {
-    plan = (await getBillingStateCached(admin, session.shop)).plan;
-  } catch (e) {
-    if (e instanceof Response) throw e; // let re-auth propagate
+  // Plan, usage and settings are independent — look them up in parallel.
+  const [planResult, usageResult, settingsResult] = await Promise.allSettled([
+    getBillingStateCached(admin, session.shop),
+    getUsage(session.shop),
+    db.shopSettings.findUnique({ where: { shop: session.shop } }),
+  ]);
+  if (planResult.status === "rejected" && planResult.reason instanceof Response) {
+    throw planResult.reason; // let re-auth propagate
   }
-
-  let usage = { imagesUsed: 0 };
-  let autoOptimize = false;
-  try {
-    usage = await getUsage(session.shop);
-    const settings = await db.shopSettings.findUnique({ where: { shop: session.shop } });
-    autoOptimize = settings?.autoOptimize ?? false;
-  } catch { /* usage/settings tables not ready — defaults */ }
+  const plan = planResult.status === "fulfilled" ? planResult.value.plan : null;
+  // usage/settings tables not ready — defaults
+  const usage = usageResult.status === "fulfilled" ? usageResult.value : { imagesUsed: 0 };
+  const autoOptimize = settingsResult.status === "fulfilled" ? settingsResult.value?.autoOptimize ?? false : false;
 
   return {
     plan: {

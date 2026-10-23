@@ -7,6 +7,7 @@ import {
   managedPricingUrl,
   appBridgeRedirect,
   cancelSubscription,
+  clearBillingCache,
 } from "../billing.server";
 import { getUsage } from "../usage.server";
 import { PLAN_TIERS } from "../planCatalog";
@@ -64,6 +65,7 @@ export const action = async ({ request }) => {
     if (!sub) return { cancelled: true };
     try {
       await cancelSubscription(admin, sub.id);
+      clearBillingCache(session.shop);
       return { cancelled: true };
     } catch (e) {
       console.error("[BILLING] in-app cancel failed, redirecting:", e?.message);

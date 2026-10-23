@@ -7,7 +7,8 @@ import { getBillingStateCached } from '../billing.server';
 import { getUsage, getRemaining } from '../usage.server';
 import { entitled } from '../plans.server';
 import db from '../db.server';
-import { mapLimit, headSizeMB, optimizeBatch } from '../optimize.server';
+import { mapLimit, optimizeBatch } from '../optimize.server';
+import { graphqlPaced, fetchRestOfImages } from '../catalog.server';
 import {
   Page,
   Layout,
@@ -27,187 +28,170 @@ import {
 /*  Product fetching (loader only)                                            */
 /* -------------------------------------------------------------------------- */
 
-async function fetchAllProducts(admin, cursor = null) {
-  const query = `#graphql
-    query GetProductsWithImages($cursor: String) {
-      products(first: 50, after: $cursor) {
-        pageInfo { hasNextPage endCursor }
-        edges {
-          node {
-            id
-            title
-            handle
-            status
-            featuredImage { id url altText width height }
-            images(first: 250) {
-              edges { node { id url altText width height } }
-            }
-            metafields(first: 250, namespace: "image_optimization") {
-              edges { node { key value } }
-            }
-          }
+// Sized to stay under Shopify's 1,000-point single-query cost cap (~27 points
+// per product). Image sizes come from `originalSource.fileSize`, so the loader
+// no longer downloads/HEADs every image, and thumbnails are requested at
+// thumbnail size instead of the full-resolution original.
+const PRODUCTS_PER_PAGE = 30;
+const MEDIA_PER_PRODUCT = 10;
+// Background page requests fetch several pages each, to cut round trips.
+const PAGES_PER_REQUEST = 3;
+
+const PRODUCTS_QUERY = `#graphql
+  query OptimizerProducts($cursor: String) {
+    products(first: ${PRODUCTS_PER_PAGE}, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        id
+        title
+        handle
+        status
+        featuredMedia { preview { image { url(transform: { maxWidth: 120, maxHeight: 120 }) } } }
+        summary: metafield(namespace: "image_optimization", key: "optimization_summary") { value }
+        media(first: ${MEDIA_PER_PRODUCT}, query: "media_type:IMAGE") {
+          pageInfo { hasNextPage endCursor }
+          nodes { ... on MediaImage { alt originalSource { fileSize } } }
         }
       }
     }
-  `;
-  const response = await admin.graphql(query, { variables: { cursor } });
-  return await response.json();
-}
-
-async function getAllProducts(admin) {
-  let allProducts = [];
-  let hasNextPage = true;
-  let cursor = null;
-  while (hasNextPage) {
-    const data = await fetchAllProducts(admin, cursor);
-    const products = data.data.products.edges.map(edge => edge.node);
-    allProducts = [...allProducts, ...products];
-    hasNextPage = data.data.products.pageInfo.hasNextPage;
-    cursor = data.data.products.pageInfo.endCursor;
   }
-  return allProducts;
-}
+`;
 
-// Parse the optimization_summary metafield (totals written by the action).
 function parseSummary(product) {
-  const mf = product.metafields.edges.find(e => e.node.key === 'optimization_summary');
-  if (!mf) return null;
+  if (!product.summary?.value) return null;
   try {
-    return JSON.parse(mf.node.value);
+    return JSON.parse(product.summary.value);
   } catch {
     return null;
   }
 }
 
-function countProcessed(product) {
-  return product.metafields.edges.filter(e => e.node.key.startsWith('image_')).length;
+function toRow(product, images) {
+  const imageCount = images.length;
+  const imagesWithAlt = images.filter(img => img.alt && img.alt.length > 10).length;
+
+  // Optimized products carry measured totals in their summary metafield;
+  // the rest use Shopify's recorded original file sizes.
+  const summary = parseSummary(product);
+  const processed = Math.min(summary?.optimizedImages || 0, imageCount);
+  const totalOriginalSize = summary
+    ? summary.totalOriginalSizeMB || 0
+    : images.reduce((s, img) => s + (img.originalSource?.fileSize || 0), 0) / (1024 * 1024);
+  const totalOptimizedSize = summary ? summary.totalOptimizedSizeMB || 0 : totalOriginalSize;
+
+  const score = imageCount > 0 ? Math.round((processed / imageCount) * 100) : 0;
+  const sizeSavedMB = Math.max(0, totalOriginalSize - totalOptimizedSize);
+  const compressionRate = totalOriginalSize > 0
+    ? Math.max(0, Math.round((sizeSavedMB / totalOriginalSize) * 100))
+    : 0;
+
+  return {
+    id: product.id,
+    title: product.title,
+    handle: product.handle,
+    status: product.status,
+    imageCount,
+    imagesWithAlt,
+    optimizedImages: processed,
+    score,
+    totalOriginalSizeMB: totalOriginalSize,
+    totalOptimizedSizeMB: totalOptimizedSize,
+    sizeSavedMB,
+    compressionRate,
+    featuredImageUrl: product.featuredMedia?.preview?.image?.url || null,
+    needsOptimization: score < 100,
+  };
+}
+
+// Fetch up to `pages` pages of products starting at `cursor`, as UI rows.
+// Returns { products, nextCursor } (nextCursor null when the catalog is done).
+async function fetchProductRows(admin, cursor, pages) {
+  const rows = [];
+  for (let i = 0; i < pages; i++) {
+    const json = await graphqlPaced(admin, PRODUCTS_QUERY, { cursor });
+    const conn = json.data.products;
+    const pageRows = await mapLimit(conn.nodes, 4, async (product) => {
+      const images = product.media.nodes.filter(Boolean);
+      if (product.media.pageInfo.hasNextPage) {
+        images.push(...await fetchRestOfImages(
+          admin, product.id, product.media.pageInfo.endCursor, 'alt originalSource { fileSize }'
+        ));
+      }
+      return toRow(product, images);
+    });
+    rows.push(...pageRows);
+    cursor = conn.pageInfo.hasNextPage ? conn.pageInfo.endCursor : null;
+    if (!cursor) break;
+  }
+  return { products: rows, nextCursor: cursor };
 }
 
 /* -------------------------------------------------------------------------- */
 /*  Loader                                                                    */
 /* -------------------------------------------------------------------------- */
 
+// The first page of products renders immediately; the client then pulls the
+// rest of the catalog in the background via `?cursor=` (see the UI below), so
+// the page no longer waits for the whole catalog before showing anything.
 export async function loader({ request }) {
   const { admin, session } = await authenticate.admin(request);
   const url = new URL(request.url);
+
+  const cursor = url.searchParams.get('cursor');
+  if (cursor) {
+    try {
+      return { kind: 'catalogPage', ...(await fetchProductRows(admin, cursor, PAGES_PER_REQUEST)) };
+    } catch (error) {
+      console.error('Error loading products page:', error);
+      return { kind: 'catalogPage', products: [], nextCursor: null, error: 'Failed to load some products' };
+    }
+  }
+
   const filter = url.searchParams.get('filter') || 'all';
   const sortBy = url.searchParams.get('sortBy') || 'score_asc';
 
   // Plan, usage and per-shop settings drive the quota meter + auto-optimize UI.
-  let plan = null;
-  try {
-    const state = await getBillingStateCached(admin, session.shop);
-    plan = state.plan;
-  } catch { /* fall through to Free defaults below */ }
-  let usage = { period: '', imagesUsed: 0 };
-  let autoOptimize = false;
-  try {
-    usage = await getUsage(session.shop);
-    const settings = await db.shopSettings.findUnique({ where: { shop: session.shop } });
-    autoOptimize = settings?.autoOptimize ?? false;
-  } catch { /* usage/settings tables not ready yet — default to zero/off */ }
-  const planInfo = {
-    tier: plan?.tier || 'free',
-    name: plan?.name || 'Free',
-    monthlyImages: plan?.monthlyImages ?? 100,
-    autoOptimizeAllowed: entitled(plan, 'autoOptimize'),
-  };
-
-  try {
-    const products = await getAllProducts(admin);
-
-    // Build a flat list of images we need to measure (only for products that
-    // have never been optimized — optimized products carry totals in their
-    // summary metafield). Measured with bounded concurrency + IPv4 so the page
-    // loads in a few seconds instead of stalling on per-image connect timeouts.
-    const measureTasks = [];
-    for (const product of products) {
-      if (parseSummary(product)) continue;
-      for (const edge of product.images.edges) {
-        measureTasks.push({ productId: product.id, url: edge.node.url });
-      }
-    }
-    const measuredSizes = await mapLimit(measureTasks, 24, t => headSizeMB(t.url));
-    const measuredByProduct = {};
-    measureTasks.forEach((t, i) => {
-      measuredByProduct[t.productId] = (measuredByProduct[t.productId] || 0) + (measuredSizes[i] || 0);
-    });
-
-    const processedProducts = products.map((product) => {
-      const images = product.images.edges.map(e => e.node);
-      const imageCount = images.length;
-      const imagesWithAlt = images.filter(img => img.altText && img.altText.length > 10).length;
-
-      const summary = parseSummary(product);
-      let processed = summary ? (summary.optimizedImages || 0) : countProcessed(product);
-      processed = Math.min(processed, imageCount);
-
-      let totalOriginalSize;
-      let totalOptimizedSize;
-      if (summary) {
-        totalOriginalSize = summary.totalOriginalSizeMB || 0;
-        totalOptimizedSize = summary.totalOptimizedSizeMB || 0;
-      } else {
-        totalOriginalSize = measuredByProduct[product.id] || 0;
-        totalOptimizedSize = totalOriginalSize; // nothing saved yet
-      }
-
-      const score = imageCount > 0 ? Math.round((processed / imageCount) * 100) : 0;
-      const sizeSavedMB = Math.max(0, totalOriginalSize - totalOptimizedSize);
-      const compressionRate = totalOriginalSize > 0
-        ? Math.max(0, Math.round((sizeSavedMB / totalOriginalSize) * 100))
-        : 0;
-
-      return {
-        id: product.id,
-        title: product.title,
-        handle: product.handle,
-        status: product.status,
-        imageCount,
-        imagesWithAlt,
-        optimizedImages: processed,
-        score,
-        totalOriginalSizeMB: totalOriginalSize,
-        totalOptimizedSizeMB: totalOptimizedSize,
-        sizeSavedMB,
-        compressionRate,
-        featuredImageUrl: product.featuredImage?.url || images[0]?.url,
-        needsOptimization: score < 100,
-      };
-    });
-
-    // Return ALL products; filtering/sorting happens instantly on the client
-    // from this list, so changing a filter never re-runs this (heavy) loader.
-    return {
-      products: processedProducts,
-      filter,
-      sortBy,
-      plan: planInfo,
-      usage,
-      autoOptimize,
-      stats: {
-        total: processedProducts.length,
-        needsOptimization: processedProducts.filter(p => p.needsOptimization).length,
-        optimized: processedProducts.filter(p => !p.needsOptimization).length,
-        totalImages: processedProducts.reduce((s, p) => s + p.imageCount, 0),
-        totalSizeMB: processedProducts.reduce((s, p) => s + p.totalOriginalSizeMB, 0),
-        potentialSavingsMB: processedProducts.reduce((s, p) => s + p.sizeSavedMB, 0),
-      },
-      error: null,
-    };
-  } catch (error) {
+  // Run them alongside the first product page rather than one after another.
+  const planPromise = getBillingStateCached(admin, session.shop)
+    .then(s => s.plan)
+    .catch(() => null); // fall through to Free defaults below
+  const usagePromise = Promise.all([
+    getUsage(session.shop),
+    db.shopSettings.findUnique({ where: { shop: session.shop } }),
+  ]).catch(() => null); // usage/settings tables not ready yet — default to zero/off
+  const firstPagePromise = fetchProductRows(admin, null, 1).catch((error) => {
     console.error('Error loading products:', error);
-    return {
-      products: [],
-      filter,
-      sortBy,
-      plan: planInfo,
-      usage,
-      autoOptimize,
-      stats: { total: 0, needsOptimization: 0, optimized: 0, totalImages: 0, totalSizeMB: 0, potentialSavingsMB: 0 },
-      error: 'Failed to load products',
-    };
-  }
+    return null;
+  });
+
+  const [plan, usageAndSettings, firstPage] = await Promise.all([planPromise, usagePromise, firstPagePromise]);
+  const usage = usageAndSettings?.[0] || { period: '', imagesUsed: 0 };
+  const autoOptimize = usageAndSettings?.[1]?.autoOptimize ?? false;
+
+  return {
+    products: firstPage?.products || [],
+    nextCursor: firstPage?.nextCursor || null,
+    filter,
+    sortBy,
+    plan: {
+      tier: plan?.tier || 'free',
+      name: plan?.name || 'Free',
+      monthlyImages: plan?.monthlyImages ?? 100,
+      autoOptimizeAllowed: entitled(plan, 'autoOptimize'),
+    },
+    usage,
+    autoOptimize,
+    error: firstPage ? null : 'Failed to load products',
+  };
+}
+
+// Each optimize batch / settings toggle is a fetcher POST; by default React
+// Router would re-run this loader (the whole catalog) after every one of them.
+// Live progress already updates the UI, so only revalidate on explicit request
+// (revalidator.revalidate() when a queue finishes) or navigation.
+export function shouldRevalidate({ formMethod, defaultShouldRevalidate }) {
+  if (formMethod && formMethod !== 'GET') return false;
+  return defaultShouldRevalidate;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -266,17 +250,57 @@ export async function action({ request }) {
 
 export default function ProductOptimization() {
   const {
-    products, filter: initialFilter, sortBy: initialSortBy, stats, error: loadError,
-    plan, usage, autoOptimize: initialAutoOptimize,
+    products: firstPageProducts, nextCursor: firstCursor, filter: initialFilter, sortBy: initialSortBy,
+    error: loadError, plan, usage, autoOptimize: initialAutoOptimize,
   } = useLoaderData();
   const fetcher = useFetcher();
   const settingsFetcher = useFetcher();
+  const pageFetcher = useFetcher();
   const revalidator = useRevalidator();
+  const [error, setError] = useState(loadError);
+
+  // Rest of the catalog, pulled page by page in the background after the first
+  // page renders. Only done once per visit: a later revalidation refreshes the
+  // first page, and live progress keeps the remaining rows current.
+  const [moreProducts, setMoreProducts] = useState([]);
+  const [loadingMore, setLoadingMore] = useState(Boolean(firstCursor));
+  const pagingStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (pagingStartedRef.current || !firstCursor) return;
+    pagingStartedRef.current = true;
+    pageFetcher.load(`/app/productoptimization?cursor=${encodeURIComponent(firstCursor)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstCursor]);
+
+  useEffect(() => {
+    if (pageFetcher.state !== 'idle' || pageFetcher.data?.kind !== 'catalogPage') return;
+    const page = pageFetcher.data;
+    setMoreProducts(prev => [...prev, ...page.products]);
+    if (page.error) setError(page.error);
+    if (page.nextCursor) {
+      pageFetcher.load(`/app/productoptimization?cursor=${encodeURIComponent(page.nextCursor)}`);
+    } else {
+      setLoadingMore(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageFetcher.state, pageFetcher.data]);
+
+  const products = useMemo(() => {
+    const ids = new Set(firstPageProducts.map(p => p.id));
+    return [...firstPageProducts, ...moreProducts.filter(p => !ids.has(p.id))];
+  }, [firstPageProducts, moreProducts]);
+
+  const stats = useMemo(() => ({
+    total: products.length,
+    needsOptimization: products.filter(p => p.needsOptimization).length,
+    totalImages: products.reduce((s, p) => s + p.imageCount, 0),
+    potentialSavingsMB: products.reduce((s, p) => s + p.sizeSavedMB, 0),
+  }), [products]);
 
   const [filter, setFilter] = useState(initialFilter);
   const [sortBy, setSortBy] = useState(initialSortBy);
   const [selectedProducts, setSelectedProducts] = useState([]);
-  const [error, setError] = useState(loadError);
   const [successMessage, setSuccessMessage] = useState(null);
   const [autoOptimize, setAutoOptimize] = useState(initialAutoOptimize);
 
@@ -289,6 +313,10 @@ export default function ProductOptimization() {
   // Track images optimized this session so the usage meter moves without a reload.
   const [sessionImages, setSessionImages] = useState(0);
   const lastOptimizedRef = useRef({}); // productId -> optimized count last seen
+
+  // A revalidation brings a fresh usage count that already includes this
+  // session's images, so restart the session delta to avoid double counting.
+  useEffect(() => { setSessionImages(0); }, [usage]);
 
   const startNext = useCallback(() => {
     const next = queueRef.current.shift();
@@ -644,6 +672,13 @@ export default function ProductOptimization() {
                   </div>
                 );
               })
+            )}
+            {loadingMore && (
+              <div className="ir-row-loading">
+                <Text variant="bodySm" as="p" tone="subdued">
+                  {`Loading more products… ${products.length.toLocaleString()} loaded`}
+                </Text>
+              </div>
             )}
           </div>
         </Layout.Section>

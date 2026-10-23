@@ -106,6 +106,16 @@ export default function App() {
   );
 }
 
+// The layout's data (plan + nav entitlements) only changes through billing, so
+// skip the Shopify billing roundtrip after every other page's POSTs (optimize
+// batches, alt text batches, settings toggles…).
+export function shouldRevalidate({ formMethod, currentUrl, defaultShouldRevalidate }) {
+  if (formMethod && formMethod !== "GET") {
+    return currentUrl.pathname.startsWith("/app/billing");
+  }
+  return defaultShouldRevalidate;
+}
+
 export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }

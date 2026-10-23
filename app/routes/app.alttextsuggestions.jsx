@@ -5,6 +5,8 @@ import { useLoaderData, useSubmit, useNavigation, useActionData, useFetcher, red
 import { authenticate } from '../shopify.server';
 import { getBillingStateCached } from '../billing.server';
 import { entitled } from '../plans.server';
+import { graphqlPaced, fetchRestOfImages } from '../catalog.server';
+import { mapLimit } from '../optimize.server';
 import { setDefaultResultOrder } from 'node:dns';
 
 // AI alt text is a Starter+ feature. Returns whether the shop's plan includes it;
@@ -95,95 +97,113 @@ async function verifyOpenAIKey() {
   }
 }
 
-// Safety cap so a pathologically large catalog can't make the loader run
-// forever. 200 pages x 50 products = up to 10,000 products.
-const MAX_PRODUCT_PAGES = 200;
+// Sized to stay under Shopify's 1,000-point single-query cost cap (~28 points
+// per product). Products with more images than MEDIA_PER_PRODUCT get the rest
+// fetched separately, so every image still receives the caption.
+const PRODUCTS_PER_PAGE = 30;
+const MEDIA_PER_PRODUCT = 20;
+// Background page requests fetch several pages each, to cut round trips.
+const PAGES_PER_REQUEST = 3;
 
 const PRODUCTS_QUERY = `#graphql
-  query GetProductsWithImages($cursor: String) {
-    products(first: 50, after: $cursor) {
+  query AltTextProducts($cursor: String) {
+    products(first: ${PRODUCTS_PER_PAGE}, after: $cursor) {
       pageInfo { hasNextPage endCursor }
-      edges {
-        node {
-          id
-          title
-          featuredImage { url altText }
-          media(first: 250) {
-            edges {
-              node {
-                mediaContentType
-                ... on MediaImage {
-                  id
-                  alt
-                  image { url }
-                }
-              }
-            }
-          }
+      nodes {
+        id
+        title
+        featuredMedia {
+          ... on MediaImage { alt image { url } }
+          preview { image { url } }
+        }
+        media(first: ${MEDIA_PER_PRODUCT}, query: "media_type:IMAGE") {
+          pageInfo { hasNextPage endCursor }
+          nodes { ... on MediaImage { id alt } }
         }
       }
     }
   }
 `;
 
+// One row per PRODUCT: alt text is generated ONCE (from its main image) and
+// applied to ALL of that product's images, so each row carries every image id.
+async function toRow(admin, product) {
+  const images = product.media.nodes.filter(n => n?.id);
+  if (product.media.pageInfo.hasNextPage) {
+    images.push(...(await fetchRestOfImages(admin, product.id, product.media.pageInfo.endCursor, 'id alt'))
+      .filter(n => n?.id));
+  }
+  if (images.length === 0) return null; // nothing to caption
+
+  // The merchandising "main" image is the thumbnail + AI input.
+  const url = product.featuredMedia?.image?.url || product.featuredMedia?.preview?.image?.url;
+  if (!url) return null;
+  const currentAlt = product.featuredMedia?.alt || images[0].alt || '';
+
+  return {
+    id: product.id,                       // row id = product id
+    productId: product.id,
+    productTitle: product.title,
+    url,                                  // full-size main image (AI input)
+    thumbUrl: thumbnailUrl(url),          // small copy for the list
+    imageIds: images.map(i => i.id),      // apply caption to ALL of these
+    imageCount: images.length,
+    currentAlt,
+    suggestedAlt: '',
+    seoScore: calculateSeoScore(currentAlt),
+    status: 'pending'
+  };
+}
+
+// Shopify CDN resizes on the fly via the `width` param.
+function thumbnailUrl(url) {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('width', '160');
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+// Fetch up to `pages` pages of products starting at `cursor`, as UI rows.
+async function fetchRows(admin, cursor, pages) {
+  const rows = [];
+  for (let i = 0; i < pages; i++) {
+    const json = await graphqlPaced(admin, PRODUCTS_QUERY, { cursor });
+    const conn = json.data.products;
+    rows.push(...(await mapLimit(conn.nodes, 4, p => toRow(admin, p))).filter(Boolean));
+    cursor = conn.pageInfo.hasNextPage ? conn.pageInfo.endCursor : null;
+    if (!cursor) break;
+  }
+  return { images: rows, nextCursor: cursor };
+}
+
+// The first page renders immediately; the client pulls the rest of the catalog
+// in the background via `?cursor=` (see the UI below).
 export async function loader({ request }) {
   const { admin, session } = await authenticate.admin(request);
   // Tier boundary: AI alt text is Starter+. Free users go back to the app home.
   if (!(await altTextAllowed(admin, session.shop))) throw redirect('/app');
 
+  const cursor = new URL(request.url).searchParams.get('cursor');
   try {
-    // Page through the whole catalog (metadata only, so this stays fast).
-    // Alt text is generated ONCE per product (from its main image) and applied
-    // to ALL of that product's images, so each row here is a PRODUCT, carrying
-    // every image id so a single caption can be written to all of them.
-    const rows = [];
-    let cursor = null;
-    let hasNextPage = true;
-    let pages = 0;
-    let truncated = false;
-
-    while (hasNextPage) {
-      if (pages >= MAX_PRODUCT_PAGES) { truncated = true; break; }
-      const response = await admin.graphql(PRODUCTS_QUERY, { variables: { cursor } });
-      const data = await response.json();
-      const conn = data.data.products;
-
-      conn.edges.forEach(({ node: product }) => {
-        const productImages = product.media.edges
-          .map(e => e.node)
-          .filter(n => n && n.mediaContentType === 'IMAGE' && n.image?.url)
-          .map(n => ({ id: n.id, url: n.image.url, alt: n.alt || '' }));
-        if (productImages.length === 0) return; // nothing to caption
-
-        // Use the merchandising "main" image for the thumbnail + AI input,
-        // falling back to the first media image.
-        const main = productImages.find(i => i.url === product.featuredImage?.url) || productImages[0];
-        const currentAlt = product.featuredImage?.altText || main.alt || '';
-
-        rows.push({
-          id: product.id,                       // row id = product id
-          productId: product.id,
-          productTitle: product.title,
-          url: main.url,                        // main image (thumbnail + AI)
-          imageIds: productImages.map(i => i.id), // apply caption to ALL of these
-          imageCount: productImages.length,
-          currentAlt,
-          suggestedAlt: '',
-          seoScore: calculateSeoScore(currentAlt),
-          status: 'pending'
-        });
-      });
-
-      hasNextPage = conn.pageInfo.hasNextPage;
-      cursor = conn.pageInfo.endCursor;
-      pages += 1;
-    }
-
-    return { images: rows, truncated };
+    if (cursor) return { kind: 'catalogPage', ...(await fetchRows(admin, cursor, PAGES_PER_REQUEST)) };
+    return await fetchRows(admin, null, 1);
   } catch (error) {
     console.error('Error loading products for alt text:', error);
-    return { images: [], loadError: 'Could not load product images. Please refresh to try again.' };
+    const loadError = 'Could not load product images. Please refresh to try again.';
+    return cursor
+      ? { kind: 'catalogPage', images: [], nextCursor: null, loadError }
+      : { images: [], loadError };
   }
+}
+
+// Generation batches and applies are POSTs whose results are merged into local
+// state, so re-running the catalog loader after each one is pure overhead.
+export function shouldRevalidate({ formMethod, defaultShouldRevalidate }) {
+  if (formMethod && formMethod !== 'GET') return false;
+  return defaultShouldRevalidate;
 }
 
 export async function action({ request }) {
@@ -477,7 +497,7 @@ function generateSmartFallbackObject(productTitle, imageUrl) {
 }
 
 export default function AltTextSuggestions() {
-  const { images: initialImages, loadError, truncated } = useLoaderData();
+  const { images: initialImages, nextCursor: firstCursor, loadError } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
   const navigation = useNavigation();
@@ -492,6 +512,35 @@ export default function AltTextSuggestions() {
   const [aiProvider, setAiProvider] = useState('openai');
   const [isVerifying, setIsVerifying] = useState(false);
   const [page, setPage] = useState(0);
+
+  // Rest of the catalog, pulled page by page in the background after the first
+  // page renders, and appended to the local rows.
+  const pageFetcher = useFetcher();
+  const [loadingMore, setLoadingMore] = useState(Boolean(firstCursor));
+  const pagingStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (pagingStartedRef.current || !firstCursor) return;
+    pagingStartedRef.current = true;
+    pageFetcher.load(`/app/alttextsuggestions?cursor=${encodeURIComponent(firstCursor)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstCursor]);
+
+  useEffect(() => {
+    if (pageFetcher.state !== 'idle' || pageFetcher.data?.kind !== 'catalogPage') return;
+    const data = pageFetcher.data;
+    setImages(prev => {
+      const ids = new Set(prev.map(img => img.id));
+      return [...prev, ...data.images.filter(img => !ids.has(img.id))];
+    });
+    if (data.loadError) setError(data.loadError);
+    if (data.nextCursor) {
+      pageFetcher.load(`/app/alttextsuggestions?cursor=${encodeURIComponent(data.nextCursor)}`);
+    } else {
+      setLoadingMore(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageFetcher.state, pageFetcher.data]);
 
   // Live progress for the batched generation loop: queue of remaining batches
   // plus a {done,total} counter so the user sees movement instead of a frozen
@@ -707,11 +756,10 @@ export default function AltTextSuggestions() {
           </Layout.Section>
         )}
 
-        {truncated && (
+        {loadingMore && (
           <Layout.Section>
             <Banner tone="info">
-              Showing the first {images.length} products. This store has a very large catalog,
-              so caption these and reload to continue with the rest.
+              {`Loading the rest of your catalog… ${images.length.toLocaleString()} products so far.`}
             </Banner>
           </Layout.Section>
         )}
@@ -805,7 +853,7 @@ export default function AltTextSuggestions() {
                           onChange={() => handleSelectImage(image.id)}
                           disabled={image.status === 'applied'}
                         />
-                        <Thumbnail source={image.url} alt={image.currentAlt || 'Product image'} size="large" />
+                        <Thumbnail source={image.thumbUrl || image.url} alt={image.currentAlt || 'Product image'} size="large" />
                         <Box width="100%">
                           <BlockStack gap="400">
                             <InlineStack gap="200" blockAlign="center">

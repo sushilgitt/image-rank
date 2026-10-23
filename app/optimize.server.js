@@ -55,18 +55,6 @@ export async function mapLimit(items, limit, fn) {
   return results;
 }
 
-// Cheaply measure an image's size in MB via a HEAD request (no body download).
-export async function headSizeMB(url) {
-  try {
-    const res = await timedFetch(url, { method: "HEAD" }, 8000);
-    if (!res.ok) return 0;
-    const cl = res.headers.get("content-length");
-    return cl ? parseInt(cl, 10) / (1024 * 1024) : 0;
-  } catch {
-    return 0;
-  }
-}
-
 export const BATCH_SIZE = 6;          // images optimized per batch call
 export const BATCH_CONCURRENCY = 6;   // images processed in parallel within a batch
 
